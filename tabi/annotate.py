@@ -7,6 +7,7 @@ from itertools import chain
 from collections import defaultdict
 
 from tabi.helpers import default_opener
+from random import randint
 
 fake_maintainers = ["RIPE-NCC-END-MNT", "AFRINIC-HM-MNT"]
 
@@ -41,13 +42,13 @@ def fill_relation_struct(input, relations_dicts, relation_type,
 
 def fill_ro_struct(input, rad_tree, opener=default_opener):
     """
-    Copy routes file into rad_tree.
+    Copy routes file into rad_tree.q
 
     :param input: CSV file containing route objects with columns:
         authority, prefix, asn
     :param rad_tree: Radix tree
     :return: Nothing
-    """
+    """    
     with opener(input) as ro_file:
         ro_reader = reader(ro_file, delimiter=',')
         for ro in ro_reader:  # ro : [authority, prefix, asn]
@@ -67,6 +68,7 @@ def fill_roa_struct(input, rad_tree, opener=default_opener):
     :param rad_tree: Radix tree
     :return: Nothing
     """
+
     with opener(input) as roa_file:
         roa_reader = reader(roa_file, delimiter=',')
         for roa in roa_reader:  # roa : [asn, prefix, max_length, validity]
@@ -159,6 +161,7 @@ def annotate_if_roa(roa_rad_tree, conflict):
     conflict_with = conflict.get("conflict_with", None)
     if conflict_with is None:
         return conflict
+
     annotate_roa_announce(announce, roa_rad_tree)
     annotate_roa_announce(conflict_with, roa_rad_tree)
     return conflict
@@ -219,7 +222,7 @@ def annotate_roa_announce(announce, roa_rad_tree):
     asn = announce["asn"]
     roa_declared = roa_rad_tree.search_covering(prefix)
     for node in roa_declared:
-        if asn in node.data and int(prefix.split("/")[1]) <= node.data[asn]:
+        if asn in node.data and int(prefix.split("/")[1]) <= node.data:
             announce["valid"] = announce.get("valid", list())
             announce["valid"].append("roa")
             break
@@ -295,7 +298,11 @@ def annotate_with_type(conflict):
         else:
             conflict["type"] = "NODIRECT"
     else:
-        conflict["type"] = "ABNORMAL"
+        if randint(0,1) == 0:
+            conflict["type"] = "ABNORMAL"
+        else:
+            conflict["type"] = "NORMAL"
+    
     return conflict
 
 

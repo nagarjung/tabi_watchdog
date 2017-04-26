@@ -69,7 +69,7 @@ def mabo_fork(filename, output=None):
     Call MABO_PATH on a given MRT dump.
     Return the subprocess handle.
     """
-    MABO_PATH = os.getenv("MABO_PATH", "mabo")
+    MABO_PATH = os.getenv("MABO_PATH", "/home/nagarjung/nagarjun/projetcs/mabo/mabo")
 
     # Check if files exists
     if not os.path.exists(filename):

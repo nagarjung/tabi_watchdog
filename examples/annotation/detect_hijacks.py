@@ -5,12 +5,13 @@ import time
 import logging
 import os
 import json
-import logging
+import datetime
 
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from tabi.emulator import parse_registry_data
 from tabi.emulator import detect_hijacks
+
 
 def choose_input(input):
     if input == "mabo":
@@ -43,24 +44,51 @@ def registry_kwargs(file_path):
 
 
 class PollingHandler(FileSystemEventHandler):
-
+    
     def on_created(self, event):
         
         super(PollingHandler, self).on_created(event)
 	
         what = 'directory' if event.is_directory else 'file'
         logging.info("Created %s: %s", what, event.src_path)    	
-        
+
         if args.registry_path == os.path.dirname(event.src_path):
+
             reg_kwargs = registry_kwargs(event.src_path)
 
             if len(reg_kwargs) == 4:
-                print (reg_kwargs)
-                print ("Completed parsing registry data")
 
+                self.list_funcs = parse_registry_data(**reg_kwargs)
+                logging.info("Completed parsing registry data")
+        
         if args.bgp_path == os.path.dirname(event.src_path):
-            print ("bgp event")
 
+            mrt_files.append(event.src_path)
+
+            if len(mrt_files) == 2:
+
+                logging.info(" two bgp files generated")
+
+                input_kwargs = {"files": mrt_files}                
+                input = choose_input(args.input)
+                bgp_kwargs = input(args.collector, **input_kwargs)
+                
+                start = datetime.datetime.now()
+                count = 0
+                for conflict in detect_hijacks(self.list_funcs, **bgp_kwargs):
+                    if conflict["type"] == "ABNORMAL":
+                        count += 1
+                        logging.info("generating hijacks")
+                        print(json.dumps(conflict))
+
+                logging.info("Hijacks completed")
+                end = datetime.datetime.now()                
+                detection_time = end - start
+                
+                logging.info("Number of hijacks found are : %s", count)        
+                logging.info("BGP Hijacks detecttion time is: %s",detection_time.total_seconds())
+                
+                #del mrt_files[:]
 	
 if __name__ == "__main__":
     
@@ -94,7 +122,6 @@ if __name__ == "__main__":
     kwargs = {}
     mrt_files = []
     observers = []
-    
     targets = []
     
     event_handler = PollingHandler()
