@@ -15,6 +15,7 @@ from tabi.annotate import annotate_if_relation, annotate_if_route_objects, \
     annotate_if_roa, annotate_if_direct, annotate_with_type, \
     fill_relation_struct, fill_ro_struct, fill_roa_struct
 from tabi.helpers import default_opener
+import datetime
 
 
 logger = logging.getLogger(__name__)
@@ -55,13 +56,16 @@ def detect_conflicts(collector, files, opener=default_opener,
     :return: Generator of conflicts
     """
     rib = EmulatedRIB()
-    queue = deque(files)
+    
+    bviews = ([file for file in files if "bview" in file])
+    bviews_queue = deque(bviews)
 
-    # insert initial bview in the RIB
-    bviews = []
-    while len(queue):
+    logging.info("starting RIB processing")
+    start = datetime.datetime.now()
+
+    while len(bviews_queue):
         try:
-            bview_file = queue.popleft()
+            bview_file = bviews_queue.popleft()
             with opener(bview_file) as f:
                 for data in f:
                     for msg in format(collector, data):
@@ -82,9 +86,20 @@ def detect_conflicts(collector, files, opener=default_opener,
     if len(bviews) == 0:
         raise ValueError("no bviews were loaded")
 
-    # play all BGP updates to detect BGP conflicts
-    for file in chain(bviews, queue):
-        with opener(file) as f:
+    end = datetime.datetime.now()                
+    rib_time = end - start
+
+    logging.info("Time for processing RIB : %s",rib_time.total_seconds())
+
+    updates = [file for file in files if "updates" in file]
+    update_queue = deque(updates)
+
+    logging.info(" Processing updates")
+    # play all BGP updates to detect BGP conflicts, i.e detects MOAS and Sub MOAS   
+    
+    while len(update_queue):
+        update_file = update_queue.popleft()
+        with opener(update_file) as f:
             for data in f:
                 for msg in format(collector, data):
                     default, _, conflicts = process_message(
@@ -102,19 +117,24 @@ def parse_registry_data(irr_org_file=None,
 
     logger.info("loading metadata...")    
     funcs = [annotate_if_direct]
+
     if irr_org_file is not None and irr_mnt_file is not None:
+        
         relations_dict = dict()
+
         fill_relation_struct(irr_org_file, relations_dict,
                              "organisations")
         fill_relation_struct(irr_mnt_file, relations_dict, "maintainers")
         funcs.append(partial(annotate_if_relation, relations_dict))
 
     if irr_ro_file is not None:
+        
         ro_rad_tree = Radix()
         fill_ro_struct(irr_ro_file, ro_rad_tree)
         funcs.append(partial(annotate_if_route_objects, ro_rad_tree))
 
     if rpki_roa_file is not None:
+        
         roa_rad_tree = Radix()
         fill_roa_struct(rpki_roa_file, roa_rad_tree)
         funcs.append(partial(annotate_if_roa, ro_rad_tree))

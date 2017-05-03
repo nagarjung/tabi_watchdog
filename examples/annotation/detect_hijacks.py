@@ -50,35 +50,35 @@ class PollingHandler(FileSystemEventHandler):
         super(PollingHandler, self).on_created(event)
 	
         what = 'directory' if event.is_directory else 'file'
-        logging.info("Created %s: %s", what, event.src_path)    	
+        logging.info("Created %s: %s", what, event.src_path)
 
         if args.registry_path == os.path.dirname(event.src_path):
-
-            reg_kwargs = registry_kwargs(event.src_path)
-
+            
+            reg_kwargs = registry_kwargs(event.src_path)            
+            
             if len(reg_kwargs) == 4:
-
-                self.list_funcs = parse_registry_data(**reg_kwargs)
+                
+                self.list_funcs = parse_registry_data(**reg_kwargs)                
                 logging.info("Completed parsing registry data")
-        
+                       
         if args.bgp_path == os.path.dirname(event.src_path):
 
             mrt_files.append(event.src_path)
-
             if len(mrt_files) == 2:
 
                 logging.info(" two bgp files generated")
-
                 input_kwargs = {"files": mrt_files}                
                 input = choose_input(args.input)
                 bgp_kwargs = input(args.collector, **input_kwargs)
-                
                 start = datetime.datetime.now()
                 count = 0
+                
                 for conflict in detect_hijacks(self.list_funcs, **bgp_kwargs):
+                    
                     if conflict["type"] == "ABNORMAL":
+                        
                         count += 1
-                        logging.info("generating hijacks")
+                        #logging.info("generating hijacks")
                         print(json.dumps(conflict))
 
                 logging.info("Hijacks completed")
@@ -87,8 +87,8 @@ class PollingHandler(FileSystemEventHandler):
                 
                 logging.info("Number of hijacks found are : %s", count)        
                 logging.info("BGP Hijacks detecttion time is: %s",detection_time.total_seconds())
-                
-                #del mrt_files[:]
+
+                del mrt_files[:]
 	
 if __name__ == "__main__":
     
@@ -107,6 +107,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--bgp-path",
                         help="enter the path for bgp rib and update files")
+    
     parser.add_argument("-v", "--verbose", action="store_true",
                         help="more logging")
     
@@ -120,15 +121,16 @@ if __name__ == "__main__":
                         datefmt='%Y-%m-%d %H:%M:%S')
     
     kwargs = {}
-    mrt_files = []
-    observers = []
-    targets = []
+    mrt_files = []    
     
-    event_handler = PollingHandler()
-    observer = Observer()        
+    targets = []
     targets.append(args.registry_path)
     targets.append(args.bgp_path)
     
+    event_handler = PollingHandler()
+    observer = Observer()
+    observers = []
+
     for path in targets:
         targetPath = str(path)
         observer.schedule(event_handler, targetPath, recursive=False)

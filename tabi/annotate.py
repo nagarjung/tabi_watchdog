@@ -8,6 +8,8 @@ from collections import defaultdict
 
 from tabi.helpers import default_opener
 from random import randint
+import urllib2
+import json
 
 fake_maintainers = ["RIPE-NCC-END-MNT", "AFRINIC-HM-MNT"]
 
@@ -68,7 +70,7 @@ def fill_roa_struct(input, rad_tree, opener=default_opener):
     :param rad_tree: Radix tree
     :return: Nothing
     """
-
+    # import pdb;pdb.set_trace()
     with opener(input) as roa_file:
         roa_reader = reader(roa_file, delimiter=',')
         for roa in roa_reader:  # roa : [asn, prefix, max_length, validity]
@@ -162,6 +164,7 @@ def annotate_if_roa(roa_rad_tree, conflict):
     if conflict_with is None:
         return conflict
 
+    # import pdb;pdb.set_trace()
     annotate_roa_announce(announce, roa_rad_tree)
     annotate_roa_announce(conflict_with, roa_rad_tree)
     return conflict
@@ -222,7 +225,9 @@ def annotate_roa_announce(announce, roa_rad_tree):
     asn = announce["asn"]
     roa_declared = roa_rad_tree.search_covering(prefix)
     for node in roa_declared:
+        # if asn in node.data and int(prefix.split("/")[1]) <= node.data[asn]:
         if asn in node.data and int(prefix.split("/")[1]) <= node.data:
+        # if asn in node.data:
             announce["valid"] = announce.get("valid", list())
             announce["valid"].append("roa")
             break
@@ -287,7 +292,6 @@ def annotate_with_type(conflict):
     announce = conflict.get("announce", None)
     if announce is None:
         announce = conflict["conflict_with"]
-
     if "valid" in announce:
         conflict["type"] = "VALID"
     elif "relation" in conflict:
@@ -297,11 +301,12 @@ def annotate_with_type(conflict):
             conflict["type"] = "DIRECT"
         else:
             conflict["type"] = "NODIRECT"
-    else:
-        if randint(0,1) == 0:
-            conflict["type"] = "ABNORMAL"
-        else:
+    else:        
+        status  = annotate_with_history(conflict)
+        if status == True:
             conflict["type"] = "NORMAL"
+        else:
+            conflict["type"] = "ABNORMAL"
     
     return conflict
 
@@ -314,3 +319,34 @@ def annotate_directly_with_type(conflict, relations_dict, ro_rad_tree,
     annotate_if_direct(conflict)
     annotate_with_type(conflict)
     return conflict
+
+def annotate_with_history(conflict):
+    """
+    1) Get prefix from conflict
+    2) Make http call to history service passing the above prefix to the API call
+    3) Compare the origin of the response
+    4) if origin is same, return status
+    """
+    announce = conflict.get("announce", None)
+    if announce is None:
+        announce = conflict["conflict_with"]
+
+    prefix = announce["prefix"]
+    asn = announce["asn"]
+
+    url = "http://172.17.0.3:4567/validate?ipPrefix="+prefix
+    response = urllib2.urlopen(url)
+    data = json.load(response)
+    
+    try:
+        temp_asn = data["originAs"]
+        if temp_asn == asn:
+            #import pdb;pdb.set_trace()
+
+            if data["status"] == True:
+                return True
+            else:
+                return False
+    except KeyError, e:
+        #print 'KeyError: prefix not found in the history'
+        return False
